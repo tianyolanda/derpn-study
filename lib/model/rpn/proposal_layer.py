@@ -103,6 +103,7 @@ class _ProposalLayer(nn.Module):
         scores = scores.view(batch_size, -1)
 
         # Convert anchors into proposals via bbox transformations
+        # 将anchor进行regression变换
         proposals = bbox_transform_inv(anchors, bbox_deltas, batch_size)
 
         # 2. clip predicted boxes to image

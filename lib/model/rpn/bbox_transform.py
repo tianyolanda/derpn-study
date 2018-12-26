@@ -20,16 +20,16 @@ def bbox_transform(ex_rois, gt_rois):
 
     gt_widths = gt_rois[:, 2] - gt_rois[:, 0] + 1.0
     gt_heights = gt_rois[:, 3] - gt_rois[:, 1] + 1.0
-    gt_ctr_x = gt_rois[:, 0] + 0.5 * gt_widths
+    gt_ctr_x = gt_rois[:, 0] + 0.5 * gt_widths #计算每个anchor对应的ground truth box对应的中心坐标和长宽
     gt_ctr_y = gt_rois[:, 1] + 0.5 * gt_heights
 
     targets_dx = (gt_ctr_x - ex_ctr_x) / ex_widths
     targets_dy = (gt_ctr_y - ex_ctr_y) / ex_heights
-    targets_dw = torch.log(gt_widths / ex_widths)
+    targets_dw = torch.log(gt_widths / ex_widths)  #计算四个坐标变换值
     targets_dh = torch.log(gt_heights / ex_heights)
 
     targets = torch.stack(
-        (targets_dx, targets_dy, targets_dw, targets_dh),1)
+        (targets_dx, targets_dy, targets_dw, targets_dh),1) #对于每一个anchor，得到四个关系值 shape: [4, num_anchor]
 
     return targets
 
@@ -75,9 +75,10 @@ def bbox_transform_batch(ex_rois, gt_rois):
     return targets
 
 def bbox_transform_inv(boxes, deltas, batch_size):
+    # 在计算anchor的坐标变换值的时候，使用到了bbox_transform函数，请注意在计算坐标变换的时候是将anchor的表示形式变成中心坐标与长宽。
     widths = boxes[:, :, 2] - boxes[:, :, 0] + 1.0
     heights = boxes[:, :, 3] - boxes[:, :, 1] + 1.0
-    ctr_x = boxes[:, :, 0] + 0.5 * widths
+    ctr_x = boxes[:, :, 0] + 0.5 * widths #计算得到每个anchor的中心坐标和长宽
     ctr_y = boxes[:, :, 1] + 0.5 * heights
 
     dx = deltas[:, :, 0::4]

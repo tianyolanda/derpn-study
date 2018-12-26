@@ -41,6 +41,8 @@ class _AnchorTargetLayer(nn.Module):
         self._scales = scales
         anchor_scales = scales
         self._anchors = torch.from_numpy(generate_anchors(scales=np.array(anchor_scales), ratios=np.array(ratios))).float()
+        # 生成9个anchor：shape: [9,4]
+        # 生成了一张图，存储了9个anchors的对角坐标
         self._num_anchors = self._anchors.size(0)
 
         # allow boxes to sit over the edge by a small amount
@@ -53,7 +55,12 @@ class _AnchorTargetLayer(nn.Module):
         #   generate 9 anchor boxes centered on cell i
         #   apply predicted bbox deltas at cell i to each of the 9 anchors
         # filter out-of-image anchors
+        # 对于每个位于i的宽高为w，h的点，围绕点i生成9个anchor box。
+        # 对9个anchor应用 predicted bbox deltas
+        # 筛选出超出图像边框的anchor
 
+
+        # input是这四个东西的组合！！！：(rpn_cls_score.data, gt_boxes, im_info, num_boxes)，下面将它们逐个拆解
         rpn_cls_score = input[0]
         gt_boxes = input[1]
         im_info = input[2]
@@ -61,25 +68,32 @@ class _AnchorTargetLayer(nn.Module):
 
         # map of shape (..., H, W)
         height, width = rpn_cls_score.size(2), rpn_cls_score.size(3)
+        # 这个是feature map长和宽
 
         batch_size = gt_boxes.size(0)
 
         feat_height, feat_width = rpn_cls_score.size(2), rpn_cls_score.size(3)
-        shift_x = np.arange(0, feat_width) * self._feat_stride
-        shift_y = np.arange(0, feat_height) * self._feat_stride
-        shift_x, shift_y = np.meshgrid(shift_x, shift_y)
+
+        # 下面是在原图上生成anchor
+        shift_x = np.arange(0, feat_width) * self._feat_stride #shape: [width,]
+        shift_y = np.arange(0, feat_height) * self._feat_stride #shape: [height,]
+        shift_x, shift_y = np.meshgrid(shift_x, shift_y)  #生成网格 shift_x shape: [height, width], shift_y shape: [height, width]
         shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
                                   shift_x.ravel(), shift_y.ravel())).transpose())
-        shifts = shifts.contiguous().type_as(rpn_cls_score).float()
+        shifts = shifts.contiguous().type_as(rpn_cls_score).float() # shape[height*width, 4]
 
-        A = self._num_anchors
-        K = shifts.size(0)
+        # add A anchors (1, A, 4) to
+        # cell K shifts (K, 1, 4) to get
+        # shift anchors (K, A, 4)
+        # reshape to (K*A, 4) shifted anchors
+        A = self._num_anchors # A = 9
+        K = shifts.size(0) # K=height*width(特征图上的)
 
         self._anchors = self._anchors.type_as(gt_boxes) # move to specific gpu.
-        all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
+        all_anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)  #shape[K,A,4] 得到所有的anchor
         all_anchors = all_anchors.view(K * A, 4)
 
-        total_anchors = int(K * A)
+        total_anchors = int(K * A) # total_anchors记录anchor的数目
 
         keep = ((all_anchors[:, 0] >= -self._allowed_border) &
                 (all_anchors[:, 1] >= -self._allowed_border) &
@@ -89,17 +103,19 @@ class _AnchorTargetLayer(nn.Module):
         inds_inside = torch.nonzero(keep).view(-1)
 
         # keep only inside anchors
-        anchors = all_anchors[inds_inside, :]
+        anchors = all_anchors[inds_inside, :] # 在这里选出合理的anchors，指的是没超出边界的
 
         # label: 1 is positive, 0 is negative, -1 is dont care
-        labels = gt_boxes.new(batch_size, inds_inside.size(0)).fill_(-1)
+        # labels的长度就是合法的anchor的个数
+        labels = gt_boxes.new(batch_size, inds_inside.size(0)).fill_(-1) #先用-1填充labels
         bbox_inside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
         bbox_outside_weights = gt_boxes.new(batch_size, inds_inside.size(0)).zero_()
 
+        # 对所有的没超过图像边界的anchor计算overlap，得到的shape: [len(anchors), len(gt_boxes)]
         overlaps = bbox_overlaps_batch(anchors, gt_boxes)
 
-        max_overlaps, argmax_overlaps = torch.max(overlaps, 2)
-        gt_max_overlaps, _ = torch.max(overlaps, 1)
+        max_overlaps, argmax_overlaps = torch.max(overlaps, 2) #对于每个anchor，找到对应的gt_box坐标。shape: [len(anchors),]
+        gt_max_overlaps, _ = torch.max(overlaps, 1) #对于每个anchor，找到最大的overlap的gt_box shape: [len(anchors)]
 
         if not cfg.TRAIN.RPN_CLOBBER_POSITIVES:
             labels[max_overlaps < cfg.TRAIN.RPN_NEGATIVE_OVERLAP] = 0
