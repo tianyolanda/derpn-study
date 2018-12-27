@@ -23,6 +23,9 @@ class _RPN(nn.Module):
         self.anchor_scales = cfg.ANCHOR_SCALES # [8,16,32]
         self.anchor_ratios = cfg.ANCHOR_RATIOS # [0.5,1,2]
         self.feat_stride = cfg.FEAT_STRIDE[0]
+        self.w_an = cfg.W_AN
+        self.h_an = cfg.H_AN
+
 
         # define the convrelu layers processing input feature map
         self.RPN_Conv = nn.Conv2d(self.din, 512, 3, 1, 1, bias=True) # 输入维度din，输出维度512，3*3卷积核
@@ -35,9 +38,21 @@ class _RPN(nn.Module):
         # 输出维度 计算
         self.nc_score_out = len(self.anchor_scales) * len(self.anchor_ratios) * 2 # 2(bg/fg) * 9 (anchors)
 
+        # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
+        # DeRPN 将原有的一个分数层分成了两个分数层：w，h分别的anchor得分
+        # 首先进行两层的输出维度计算
+        self.DeRPN_nc_score_out_w = len(self.w_an)*2
+        self.DeRPN_nc_score_out_h = len(self.w_an)*2
+        # DeRPN新增代码分割线==================================================#
 
         self.RPN_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)  # 1*1卷积核，改变维度用
         # 输入维度512，输出：（k=3*3=9）*2  ---- 【anchor个数*前景/背景】
+
+        # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
+        # DeRPN 分别输出w，h的anchor得分
+        self.DeRPN_cls_score_w = nn.Conv2d(512, self.DeRPN_nc_score_out_w, 1, 1, 0)
+        self.DeRPN_cls_score_h = nn.Conv2d(512, self.DeRPN_nc_score_out_h, 1, 1, 0)
+        # DeRPN新增代码分割线==================================================#
 
         # define anchor box offset prediction layer
         self.nc_bbox_out = len(self.anchor_scales) * len(self.anchor_ratios) * 4 # 4(coords) * 9 (anchors)
@@ -49,9 +64,23 @@ class _RPN(nn.Module):
         # 我们知道这个就够了，因为整个rpn就是要训练来预测每个位置这些anchors的前背景分类得分和边框回归值。
         # 所以只需要在proposal_layer开始的时候根据经验生成这些anchors，最后在rpn末端对这些anchors进行调整、排序和筛除。【只是用来训练cls和reg层】
 
+        # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
+        # DeRPN 将原有的一个分数层分成了两个分数层：w，h分别的regression 计算
+        self.DeRPN_nc_bbox_out_w = len(self.w_an) * 4 # 4(coords) * w
+        self.DeRPN_nc_bbox_out_h = len(self.h_an) * 4 # 4(coords) * h
+
+        self.DeRPN_bbox_pred_w = nn.Conv2d(512, self.DeRPN_nc_bbox_out_w, 1, 1, 0) # 1*1卷积核，改变维度用
+        self.DeRPN_bbox_pred_h = nn.Conv2d(512, self.DeRPN_nc_bbox_out_h, 1, 1, 0) # 1*1卷积核，改变维度用
+        # DeRPN新增代码分割线==================================================#
+
         # define proposal layer
         self.RPN_proposal = _ProposalLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
         # 根据anchor回归值微调anchor的大小和位置，获得真正的proposals
+
+        # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
+        self.De
+
+
 
         # define anchor target layer
         self.RPN_anchor_target = _AnchorTargetLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)

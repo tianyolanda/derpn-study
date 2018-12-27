@@ -288,6 +288,10 @@ __C.POOLING_SIZE = 7
 # Maximal number of gt rois in an image during Training
 __C.MAX_NUM_GT_BOXES = 20
 
+# Anchor decomposition into w_an,h_an
+__C.W_AN = [16,32,64,128,256,512,1024]
+__C.H_AN = [16,32,64,128,256,512,1024]
+
 # Anchor scales for RPN
 # 描述了anchor的大小
 # 原文中写的是128*128，256*256，512*512三种大小的anchor
