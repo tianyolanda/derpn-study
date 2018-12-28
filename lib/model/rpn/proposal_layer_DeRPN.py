@@ -16,25 +16,28 @@ import math
 import yaml
 from model.utils.config import cfg
 from .generate_anchors import generate_anchors
+from .generate_anchors_DeRPN import generate_anchor_strings
 from .bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
+from .bbox_transform_DeRPN import bbox_transform_inv_DeRPN, clip_boxes_DeRPN, clip_boxes_batch_DeRPN
+
 from model.nms.nms_wrapper import nms
 
 import pdb
 
 DEBUG = False
 
-class _ProposalLayer(nn.Module):
+class _DeRPN_ProposalLayer(nn.Module):
     """
     Outputs object detection proposals by applying estimated bounding-box
     transformations to a set of regular boxes (called "anchors").
     """
-    # 从生成300个proposal
-    def __init__(self, feat_stride, scales, ratios):
-        super(_ProposalLayer, self).__init__()
+    # 生成anchors ：2w个大概
+    # 根据reg和cls的值，筛选出300个proposal
+    def __init__(self, feat_stride, w_an, h_an):
+        super(_DeRPN_ProposalLayer, self).__init__()
 
         self._feat_stride = feat_stride
-        self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales), 
-            ratios=np.array(ratios))).float()
+        self._anchor_strings = torch.from_numpy(generate_anchor_strings(np.array(w_an))).float()
         self._num_anchors = self._anchors.size(0)
 
         # rois blob: holds R regions of interest, each is a 5-tuple
@@ -64,19 +67,21 @@ class _ProposalLayer(nn.Module):
 
         # the first set of _num_anchors channels are bg probs
         # the second set are the fg probs
-        scores = input[0][:, self._num_anchors:, :, :]
-        # 得到了60∗40个位置对应的anchors的分类得分
+        scores_w = input[0][:, self._num_anchors:, :, :]
+        scores_h = input[1][:, self._num_anchors:, :, :]
 
-        bbox_deltas = input[1] # 每个位置对应的边框回归值
-        im_info = input[2]
-        cfg_key = input[3] # Train / Test 标签
+        bbox_deltas_w = input[2]
+        bbox_deltas_h = input[3]
+
+        im_info = input[4]
+        cfg_key = input[5] # Train / Test 标签
 
         pre_nms_topN  = cfg[cfg_key].RPN_PRE_NMS_TOP_N # Train: 12000, Test: 6000
         post_nms_topN = cfg[cfg_key].RPN_POST_NMS_TOP_N # Train: 2000,  Test: 300
         nms_thresh    = cfg[cfg_key].RPN_NMS_THRESH # Train: 0.7,  Test: 0.7
         min_size      = cfg[cfg_key].RPN_MIN_SIZE # Train: 8,  Test: 16
 
-        batch_size = bbox_deltas.size(0)
+        batch_size = bbox_deltas_w.size(0)
 
         feat_height, feat_width = scores.size(2), scores.size(3)
         shift_x = np.arange(0, feat_width) * self._feat_stride
@@ -89,7 +94,7 @@ class _ProposalLayer(nn.Module):
         A = self._num_anchors
         K = shifts.size(0)
 
-        self._anchors = self._anchors.type_as(scores)
+        self._anchors = self._anchors.type_as(scores) # 更改type和scores一样
         # anchors = self._anchors.view(1, A, 4) + shifts.view(1, K, 4).permute(1, 0, 2).contiguous()
         anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
         anchors = anchors.view(1, K * A, 4).expand(batch_size, K * A, 4)

@@ -6,6 +6,8 @@ from torch.autograd import Variable
 
 from model.utils.config import cfg
 from .proposal_layer import _ProposalLayer
+from .proposal_layer_DeRPN import _DeRPN_ProposalLayer
+
 from .anchor_target_layer import _AnchorTargetLayer
 from model.utils.net_utils import _smooth_l1_loss
 
@@ -41,17 +43,18 @@ class _RPN(nn.Module):
         # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
         # DeRPN 将原有的一个分数层分成了两个分数层：w，h分别的anchor得分
         # 首先进行两层的输出维度计算
-        self.DeRPN_nc_score_out_w = len(self.w_an)*2
-        self.DeRPN_nc_score_out_h = len(self.w_an)*2
+        # the classiﬁcation layer predicts 2×2N scores to estimate whether an anchor string is matched or not matched with object edges
+        self.DeRPN_nc_score_out_w = len(self.w_an)*2 # 2(fg/bg) * w
+        self.DeRPN_nc_score_out_h = len(self.h_an)*2 # 2(fg/bg) * h
         # DeRPN新增代码分割线==================================================#
 
         self.RPN_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)  # 1*1卷积核，改变维度用
         # 输入维度512，输出：（k=3*3=9）*2  ---- 【anchor个数*前景/背景】
 
         # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
-        # DeRPN 分别输出w，h的anchor得分
-        self.DeRPN_cls_score_w = nn.Conv2d(512, self.DeRPN_nc_score_out_w, 1, 1, 0)
-        self.DeRPN_cls_score_h = nn.Conv2d(512, self.DeRPN_nc_score_out_h, 1, 1, 0)
+        # DeRPN 分别输出w，h的anchor得分：cls层
+        self.DeRPN_cls_score_w = nn.Conv2d(512, self.DeRPN_nc_score_out_w, 1, 1, 0) # [1,14,height,width]
+        self.DeRPN_cls_score_h = nn.Conv2d(512, self.DeRPN_nc_score_out_h, 1, 1, 0) # [1,14,height,width]
         # DeRPN新增代码分割线==================================================#
 
         # define anchor box offset prediction layer
@@ -65,21 +68,21 @@ class _RPN(nn.Module):
         # 所以只需要在proposal_layer开始的时候根据经验生成这些anchors，最后在rpn末端对这些anchors进行调整、排序和筛除。【只是用来训练cls和reg层】
 
         # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
-        # DeRPN 将原有的一个分数层分成了两个分数层：w，h分别的regression 计算
-        self.DeRPN_nc_bbox_out_w = len(self.w_an) * 4 # 4(coords) * w
-        self.DeRPN_nc_bbox_out_h = len(self.h_an) * 4 # 4(coords) * h
+        # DeRPN reg层：w，h分别的regression 计算
+        # Besides, each anchor string predicts a width segment or height segment with the coordinates of (x, w) or (y, h), respectively.
+        # Therefore, the regression layer also predicts 2×2N values.
+        self.DeRPN_nc_bbox_out_w = len(self.w_an) * 2 # 2(coords) * w
+        self.DeRPN_nc_bbox_out_h = len(self.h_an) * 2 # 2(coords) * h
 
-        self.DeRPN_bbox_pred_w = nn.Conv2d(512, self.DeRPN_nc_bbox_out_w, 1, 1, 0) # 1*1卷积核，改变维度用
-        self.DeRPN_bbox_pred_h = nn.Conv2d(512, self.DeRPN_nc_bbox_out_h, 1, 1, 0) # 1*1卷积核，改变维度用
+        self.DeRPN_bbox_pred_w = nn.Conv2d(512, self.DeRPN_nc_bbox_out_w, 1, 1, 0) # [1,14,height,width]
+        self.DeRPN_bbox_pred_h = nn.Conv2d(512, self.DeRPN_nc_bbox_out_h, 1, 1, 0) # [1,14,height,width]
         # DeRPN新增代码分割线==================================================#
 
-        # define proposal layer
         self.RPN_proposal = _ProposalLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
-        # 根据anchor回归值微调anchor的大小和位置，获得真正的proposals
+        # 根据anchor回归值微调anchor的大小和位置，获得真正的proposals,NMS
 
         # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
-        self.De
-
+        self.DeRPN_proposal = _DeRPN_ProposalLayer(self.feat_stride, self.w_an, self.h_an)
 
 
         # define anchor target layer
@@ -98,10 +101,10 @@ class _RPN(nn.Module):
     def reshape(x, d):
         input_shape = x.size()
         x = x.view(
-            input_shape[0],
-            int(d),
-            int(float(input_shape[1] * input_shape[2]) / float(d)),
-            input_shape[3]
+            input_shape[0], # batch size 不变
+            int(d), # 指定维度
+            int(float(input_shape[1] * input_shape[2]) / float(d)), # input_shape[1]是anchors数目*d。因此：行变成了原来的anchors倍
+            input_shape[3] # 列不变
         )
         return x
 
@@ -115,17 +118,38 @@ class _RPN(nn.Module):
         # 获得前景/背景概率
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)
 
+        # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
+        derpn_cls_score_w = self.DeRPN_cls_score_w(rpn_conv1)
+        derpn_cls_score_h = self.DeRPN_cls_score_h(rpn_conv1)
+
+
         rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
         rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, 1)
-        rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
+        rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out) # 最终获得的cls层tensor
+
+        # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
+        derpn_cls_score_w_reshape = self.reshape(derpn_cls_score_w, 2)
+        derpn_cls_prob_w_reshape = F.softmax(derpn_cls_score_w_reshape, 1)
+        derpn_cls_prob_w = self.reshape(derpn_cls_prob_w_reshape, self.DeRPN_nc_score_out_w) # w -- cls层tensor
+        derpn_bbox_pred_w = self.DeRPN_bbox_pred_w(rpn_conv1) # w -- reg层tensor
+
+        derpn_cls_score_h_reshape = self.reshape(derpn_cls_score_h, 2)
+        derpn_cls_prob_h_reshape = F.softmax(derpn_cls_score_h_reshape, 1)
+        derpn_cls_prob_h = self.reshape(derpn_cls_prob_h_reshape, self.DeRPN_nc_score_out_h)  # h -- cls层tensor
+        derpn_bbox_pred_h = self.DeRPN_bbox_pred_h(rpn_conv1)  # h -- reg层tensor
+
+        derpn_rois = self.RPN_proposal((derpn_cls_prob_w.data, derpn_cls_prob_h.data, derpn_bbox_pred_w.data,derpn_bbox_pred_h.data,
+                                 im_info, cfg_key))
+
 
         # get rpn offsets to the anchor boxes【并行】
         # 获得anchor微调regression四个值
-        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)
+        rpn_bbox_pred = self.RPN_bbox_pred(rpn_conv1)# 最终获得的reg层tensor
 
         # proposal layer
         cfg_key = 'TRAIN' if self.training else 'TEST'
-        # 根据reg的四个值，对anchor进行微调
+        # 根据上面获得的两组tensor（cls和reg），对所有的anchor进行:
+        # 生成(约2w个)->reg微调->滤除尺寸过小的anchor->按照cls分数排序->NMS->挑选出300个anchor->传给roi
         rois = self.RPN_proposal((rpn_cls_prob.data, rpn_bbox_pred.data,
                                  im_info, cfg_key))
 
