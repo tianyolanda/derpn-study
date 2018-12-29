@@ -48,12 +48,13 @@ def generate_anchors(base_size=16, ratios=[0.5, 1, 2],
     Generate anchor (reference) windows by enumerating aspect ratios X
     scales wrt a reference (0, 0, 15, 15) window.
     # scale 是 2的3，4，5次方 -- 128*128，256*256，512*512三种大小的anchor
+    anchor.shape : [9,4]
     """
 
     base_anchor = np.array([1, 1, base_size, base_size]) - 1
     # base_anchor 每个值依次减1 --> [0,0,15,15]
     # 基础anchor：[左上坐标(0,0)，右下坐标(15,15)] ，以它为基础，生成各种ratios的anchor
-    ratio_anchors = _ratio_enum(base_anchor, ratios)
+    ratio_anchors = _ratio_enum(base_anchor, ratios)  # []
     # 得到了一堆横向堆叠的基于比例的anchors
     anchors = np.vstack([_scale_enum(ratio_anchors[i, :], scales)
                          for i in xrange(ratio_anchors.shape[0])])

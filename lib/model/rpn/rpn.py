@@ -44,8 +44,8 @@ class _RPN(nn.Module):
         # DeRPN 将原有的一个分数层分成了两个分数层：w，h分别的anchor得分
         # 首先进行两层的输出维度计算
         # the classiﬁcation layer predicts 2×2N scores to estimate whether an anchor string is matched or not matched with object edges
-        self.DeRPN_nc_score_out_w = len(self.w_an)*2 # 2(fg/bg) * w
-        self.DeRPN_nc_score_out_h = len(self.h_an)*2 # 2(fg/bg) * h
+        self.DeRPN_nc_score_out_w = len(self.w_an)*2 # 2(fg/bg) * w : 2*7 = 14
+        self.DeRPN_nc_score_out_h = len(self.h_an)*2 # 2(fg/bg) * h : 14
         # DeRPN新增代码分割线==================================================#
 
         self.RPN_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)  # 1*1卷积核，改变维度用
@@ -71,8 +71,8 @@ class _RPN(nn.Module):
         # DeRPN reg层：w，h分别的regression 计算
         # Besides, each anchor string predicts a width segment or height segment with the coordinates of (x, w) or (y, h), respectively.
         # Therefore, the regression layer also predicts 2×2N values.
-        self.DeRPN_nc_bbox_out_w = len(self.w_an) * 2 # 2(coords) * w
-        self.DeRPN_nc_bbox_out_h = len(self.h_an) * 2 # 2(coords) * h
+        self.DeRPN_nc_bbox_out_w = len(self.w_an) * 2 # 2(coords) * w : 14
+        self.DeRPN_nc_bbox_out_h = len(self.h_an) * 2 # 2(coords) * h : 14
 
         self.DeRPN_bbox_pred_w = nn.Conv2d(512, self.DeRPN_nc_bbox_out_w, 1, 1, 0) # [1,14,height,width]
         self.DeRPN_bbox_pred_h = nn.Conv2d(512, self.DeRPN_nc_bbox_out_h, 1, 1, 0) # [1,14,height,width]
@@ -113,34 +113,43 @@ class _RPN(nn.Module):
         batch_size = base_feat.size(0)
 
         # return feature map after convrelu layer
-        rpn_conv1 = F.relu(self.RPN_Conv(base_feat), inplace=True) # 3*3*512 卷积核
+        rpn_conv1 = F.relu(self.RPN_Conv(base_feat), inplace=True) # 经过3*3*512 卷积核：rep_conv1维度 [1,512,height,width]
         # get rpn classification score 【并行】
         # 获得前景/背景概率
-        rpn_cls_score = self.RPN_cls_score(rpn_conv1)
+        rpn_cls_score = self.RPN_cls_score(rpn_conv1) # [1,18,height,width]
 
         # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
-        derpn_cls_score_w = self.DeRPN_cls_score_w(rpn_conv1)
-        derpn_cls_score_h = self.DeRPN_cls_score_h(rpn_conv1)
+        # cls层
+        derpn_cls_score_w = self.DeRPN_cls_score_w(rpn_conv1)  # [1,14,height,width]
+        derpn_cls_score_h = self.DeRPN_cls_score_h(rpn_conv1)  # [1,14,height,width]
+        # DeRPN新增代码分割线==================================================#
 
 
-        rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
-        rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, 1)
-        rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out) # 最终获得的cls层tensor
+        rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2) # [1, 2, height*9, width]
+        rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, 1) # [1, 1, height*18, width]
+        rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out) # 最终获得的cls层tensor # [1, 18, height, width]
 
         # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
-        derpn_cls_score_w_reshape = self.reshape(derpn_cls_score_w, 2)
-        derpn_cls_prob_w_reshape = F.softmax(derpn_cls_score_w_reshape, 1)
-        derpn_cls_prob_w = self.reshape(derpn_cls_prob_w_reshape, self.DeRPN_nc_score_out_w) # w -- cls层tensor
-        derpn_bbox_pred_w = self.DeRPN_bbox_pred_w(rpn_conv1) # w -- reg层tensor
+
+        # cls层 reshape
+        derpn_cls_score_w_reshape = self.reshape(derpn_cls_score_w, 2) # [1, 2, height * 7, width]
+        derpn_cls_prob_w_reshape = F.softmax(derpn_cls_score_w_reshape, 1) # [1, 1, height * 7 * 2, width]
+        derpn_cls_prob_w = self.reshape(derpn_cls_prob_w_reshape, self.DeRPN_nc_score_out_w) # w -- cls层tensor [1,14,height,width]
+
 
         derpn_cls_score_h_reshape = self.reshape(derpn_cls_score_h, 2)
         derpn_cls_prob_h_reshape = F.softmax(derpn_cls_score_h_reshape, 1)
         derpn_cls_prob_h = self.reshape(derpn_cls_prob_h_reshape, self.DeRPN_nc_score_out_h)  # h -- cls层tensor
-        derpn_bbox_pred_h = self.DeRPN_bbox_pred_h(rpn_conv1)  # h -- reg层tensor
+
+        # reg层
+        derpn_bbox_pred_w = self.DeRPN_bbox_pred_w(rpn_conv1) # w -- reg层tensor [1，14，height,width]
+
+        derpn_bbox_pred_h = self.DeRPN_bbox_pred_h(rpn_conv1)  # h -- reg层tensor [1，14，height,width]
 
         derpn_rois = self.RPN_proposal((derpn_cls_prob_w.data, derpn_cls_prob_h.data, derpn_bbox_pred_w.data,derpn_bbox_pred_h.data,
                                  im_info, cfg_key))
 
+        # DeRPN新增代码分割线==================================================#
 
         # get rpn offsets to the anchor boxes【并行】
         # 获得anchor微调regression四个值
