@@ -35,7 +35,7 @@ class _ProposalLayer(nn.Module):
         self._feat_stride = feat_stride
         self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales), 
             ratios=np.array(ratios))).float()
-        self._num_anchors = self._anchors.size(0)
+        self._num_anchors = self._anchors.size(0) # 9
 
         # rois blob: holds R regions of interest, each is a 5-tuple
         # (n, x1, y1, x2, y2) specifying an image batch index n and a
@@ -79,7 +79,7 @@ class _ProposalLayer(nn.Module):
         batch_size = bbox_deltas.size(0)
 
         feat_height, feat_width = scores.size(2), scores.size(3)
-        shift_x = np.arange(0, feat_width) * self._feat_stride
+        shift_x = np.arange(0, feat_width) * self._feat_stride #     * 16
         shift_y = np.arange(0, feat_height) * self._feat_stride
         shift_x, shift_y = np.meshgrid(shift_x, shift_y)
         shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),

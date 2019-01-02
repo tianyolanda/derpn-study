@@ -16,7 +16,7 @@ import math
 import yaml
 from model.utils.config import cfg
 from .generate_anchors import generate_anchors
-from .generate_anchors_DeRPN import generate_anchor_strings
+from .generate_anchor_strings_DeRPN import generate_anchor_strings
 from .bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
 from .bbox_transform_DeRPN import bbox_transform_inv_DeRPN, clip_boxes_DeRPN, clip_boxes_batch_DeRPN
 
@@ -37,8 +37,12 @@ class _DeRPN_ProposalLayer(nn.Module):
         super(_DeRPN_ProposalLayer, self).__init__()
 
         self._feat_stride = feat_stride
-        self._anchor_strings = torch.from_numpy(generate_anchor_strings(np.array(w_an))).float()
-        self._num_anchors = self._anchors.size(0)
+        self._anchor_strings_w = torch.from_numpy(generate_anchor_strings(w_an = np.array(w_an))).float()
+        self._anchor_strings_h = torch.from_numpy(generate_anchor_strings(w_an = np.array(h_an))).float()
+
+        self._num_anchor_strings_w = self._anchor_strings_w.size(0) # 7
+        self._num_anchor_strings_w = self._anchor_strings_h.size(0) # 7
+
 
         # rois blob: holds R regions of interest, each is a 5-tuple
         # (n, x1, y1, x2, y2) specifying an image batch index n and a
@@ -67,8 +71,8 @@ class _DeRPN_ProposalLayer(nn.Module):
 
         # the first set of _num_anchors channels are bg probs
         # the second set are the fg probs
-        scores_w = input[0][:, self._num_anchors:, :, :]
-        scores_h = input[1][:, self._num_anchors:, :, :]
+        scores_w = input[0][:, self._num_anchors_w:, :, :] # [1,7,height,width]
+        scores_h = input[1][:, self._num_anchors_h:, :, :] # [1,7,height,width]
 
         bbox_deltas_w = input[2]
         bbox_deltas_h = input[3]
@@ -83,35 +87,59 @@ class _DeRPN_ProposalLayer(nn.Module):
 
         batch_size = bbox_deltas_w.size(0)
 
-        feat_height, feat_width = scores.size(2), scores.size(3)
-        shift_x = np.arange(0, feat_width) * self._feat_stride
-        shift_y = np.arange(0, feat_height) * self._feat_stride
-        shift_x, shift_y = np.meshgrid(shift_x, shift_y)
-        shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
-                                  shift_x.ravel(), shift_y.ravel())).transpose())
-        shifts = shifts.contiguous().type_as(scores).float()
+        feat_height, feat_width = scores_w.size(2), scores_w.size(3) # feat_height 是featuer map的宽，feat_height是高
 
-        A = self._num_anchors
-        K = shifts.size(0)
+        shift_x = np.arange(0, feat_width) * self._feat_stride # [0,1,..,feat_width_w] * 16
+        shift_y = np.arange(0, feat_height) * self._feat_stride # shape (40,)
+        shift_x, shift_y = np.meshgrid(shift_x, shift_y) # 变成格子状（x是横着摞起来，y是竖着摞起来）
+        # 此时 shift_x shape (60, 40)， shift_y shape (60, 40)
 
-        self._anchors = self._anchors.type_as(scores) # 更改type和scores一样
+        shifts_w = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
+                                  )).transpose())
+        # shift_x.ravel() 是把shift_x 抻平，类似flatten(),变成了shape (2400,)
+        # vstack 是把4个(2400，)， 垂直（按照行顺序）的把数组给堆叠起来。shape：torch.Size([4, 2400])
+        # transpose 是转置： 输出shape：torch.Size([2400, 4])
+
+        shifts_w = shifts_w.contiguous().type_as(scores_w).float()
+        # tensor_1.type_as(tensor_2), 将tensor_1转换成tensor_2
+        # 类型是指int float这些
+        # 其余shape不变，依然是[2400,4]
+
+        A = self._num_anchor_strings_w # 7
+        K = shifts_w.size(0) # 2400
+
+        self._anchor_strings_w = self._anchor_strings_w.type_as(scores_w) # 更改type和scores一样
         # anchors = self._anchors.view(1, A, 4) + shifts.view(1, K, 4).permute(1, 0, 2).contiguous()
-        anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
-        anchors = anchors.view(1, K * A, 4).expand(batch_size, K * A, 4)
+        anchor_strings_w = self._anchor_strings_w.view(1, A, 2) + shifts_w.view(K, 1, 2)
+        anchor_strings_w = anchor_strings_w.view(1, K * A, 4).expand(batch_size, K * A, 2)
 
+        anchor_strings_h = anchor_strings_w
         # Transpose and reshape predicted bbox transformations to get them
         # into the same order as the anchors:
 
-        bbox_deltas = bbox_deltas.permute(0, 2, 3, 1).contiguous()
-        bbox_deltas = bbox_deltas.view(batch_size, -1, 4)
+
+        # reg 层的reshape
+        bbox_deltas_w = bbox_deltas_w.permute(0, 2, 3, 1).contiguous()
+        # permute()实现维度调转： 从 torch.Size([1, 7, 60, 40]) 变为 torch.Size([1, 60, 40, 7])
+        bbox_deltas_w = bbox_deltas_w.view(batch_size, -1, 2)
+        # 维度变换： 变为 torch.Size([1, 4200, 2])
+
+        bbox_deltas_h = bbox_deltas_h.permute(0, 2, 3, 1).contiguous()
+        bbox_deltas_h = bbox_deltas_h.view(batch_size, -1, 2)
 
         # Same story for the scores:
-        scores = scores.permute(0, 2, 3, 1).contiguous()
-        scores = scores.view(batch_size, -1)
+        # cls score层的reshape
+        scores_w = scores_w.permute(0, 2, 3, 1).contiguous()
+        scores_w = scores_w.view(batch_size, -1) #
+
+        scores_h = scores_h.permute(0, 2, 3, 1).contiguous()
+        scores_h = scores_h.view(batch_size, -1)
 
         # Convert anchors into proposals via bbox transformations
         # 将anchor进行regression变换,根据边框回归值调整边框的大小和位置获得真正的proposals，
-        proposals = bbox_transform_inv(anchors, bbox_deltas, batch_size)
+        proposals_w = bbox_transform_inv(anchor_strings_w, bbox_deltas_w, batch_size)
+        proposals_h = bbox_transform_inv(anchor_strings_h, bbox_deltas_h, batch_size)
+
 
         # 2. clip predicted boxes to image
         proposals = clip_boxes(proposals, im_info, batch_size)

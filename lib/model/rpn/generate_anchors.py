@@ -7,7 +7,7 @@ from __future__ import print_function
 # --------------------------------------------------------
 
 import numpy as np
-import pdb
+import torch
 
 # Verify that we compute the same anchors as Shaoqing's matlab implementation:
 #
@@ -120,7 +120,12 @@ def _scale_enum(anchor, scales):
 if __name__ == '__main__':
     import time
     t = time.time()
-    a = generate_anchors()
+    a = torch.from_numpy(generate_anchors(scales=np.array([8,16,32]),
+                                      ratios=np.array([0.5,1,2]))).float()
+    # b = generate_anchors(scales=np.array([8,16,32]),
+    #                                   ratios=np.array([0.5,1,2]))
     print(time.time() - t)
     print(a)
-    from IPython import embed; embed()
+    print(a.size(0))
+    # print(b)
+    # from IPython import embed; embed()
