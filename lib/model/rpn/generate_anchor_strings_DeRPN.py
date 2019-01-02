@@ -26,6 +26,7 @@ def generate_anchor_strings(base_size=16, w_an = np.array([16,32,64,128,256,512,
                                  x_ctr + 0.5 * (ws - 1)))  # x终止坐标
     return(anchors_strings)
 
+
 if __name__ == '__main__':
     import time
     t = time.time()
