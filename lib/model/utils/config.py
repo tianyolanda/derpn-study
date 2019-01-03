@@ -145,6 +145,10 @@ __C.TRAIN.RPN_PRE_NMS_TOP_N = 12000
 __C.TRAIN.RPN_POST_NMS_TOP_N = 2000
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
 __C.TRAIN.RPN_MIN_SIZE = 8
+
+__C.TRAIN.DERPN_COM_TOP_N = 8000
+__C.TRAIN.DERPN_COM_TOP_k = 4
+
 # Deprecated (outside weights)
 __C.TRAIN.RPN_BBOX_INSIDE_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
 # Give the positive RPN examples weight of p * 1 / {num positives}
@@ -200,6 +204,10 @@ __C.TEST.RPN_MIN_SIZE = 16
 
 # Testing mode, default to be 'nms', 'top' is slower but better
 # See report for details
+
+__C.TEST.DERPN_COM_TOP_N = 5000
+__C.TEST.DERPN_COM_TOP_k = 3
+
 __C.TEST.MODE = 'nms'
 
 # Only useful when TEST.MODE is 'top', specifies the number of top proposals to select

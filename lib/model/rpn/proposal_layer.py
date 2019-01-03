@@ -128,23 +128,23 @@ class _ProposalLayer(nn.Module):
         # 对proposals进行得分排序，保留前2000个高分proposals，最后用nms过滤，保留最好的前300个proposals。
         scores_keep = scores
         proposals_keep = proposals
-        _, order = torch.sort(scores_keep, 1, True)
+        _, order = torch.sort(scores_keep, 1, True)  # [1,16800,2]
 
         output = scores.new(batch_size, post_nms_topN, 5).zero_()
         for i in range(batch_size):
             # # 3. remove predicted boxes with either height or width < threshold
             # # (NOTE: convert min_size to input image scale stored in im_info[2])
-            proposals_single = proposals_keep[i]
-            scores_single = scores_keep[i]
+            proposals_single = proposals_keep[i] # 降一个维度，proposals_single: [16800,2]
+            scores_single = scores_keep[i] # [16800]
 
             # # 4. sort all (proposal, score) pairs by score from highest to lowest
             # # 5. take top pre_nms_topN (e.g. 6000)
-            order_single = order[i]
+            order_single = order[i]  # [16800]
 
-            if pre_nms_topN > 0 and pre_nms_topN < scores_keep.numel():
-                order_single = order_single[:pre_nms_topN]
+            if pre_nms_topN > 0 and pre_nms_topN < scores_keep.numel(): # 防止数组越界
+                order_single = order_single[:pre_nms_topN]  # NMS前，留下12000个。 [12000]
 
-            proposals_single = proposals_single[order_single, :]
+            proposals_single = proposals_single[order_single, :] # 把编号为order_single的都取出来了 [12000,2]
             scores_single = scores_single[order_single].view(-1,1)
 
             # 6. apply nms (e.g. threshold = 0.7)

@@ -78,33 +78,24 @@ def bbox_transform_batch(ex_rois, gt_rois):
 #
 
 
-def bbox_transform_inv(boxes, deltas, batch_size):
+def bbox_transform_inv_DeRPN(anchor_strings, deltas, batch_size):
     # 在计算anchor的坐标变换值的时候，使用到了bbox_transform函数，请注意在计算坐标变换的时候是将anchor的表示形式变成中心坐标与长宽。
-    widths = boxes[:, :, 2] - boxes[:, :, 0] + 1.0
-    heights = boxes[:, :, 3] - boxes[:, :, 1] + 1.0
-    ctr_x = boxes[:, :, 0] + 0.5 * widths #计算得到每个anchor的中心坐标和长宽
-    ctr_y = boxes[:, :, 1] + 0.5 * heights
+    widths = anchor_strings[:, :, 1] - anchor_strings[:, :, 0] + 1.0  # w = xmax - xmin
+    # heights = boxes[:, :, 3] - boxes[:, :, 1] + 1.0
+    ctr_x = anchor_strings[:, :, 0] + 0.5 * widths  # 计算得到每个anchor string的中心坐标
+    # ctr_y = boxes[:, :, 1] + 0.5 * heights
 
-    dx = deltas[:, :, 0::4]
-    dy = deltas[:, :, 1::4]
-    dw = deltas[:, :, 2::4]
-    dh = deltas[:, :, 3::4]
+    dx = deltas[:, :, 0::2]  # 0::2 = 0
+    dw = deltas[:, :, 1::2]
 
     pred_ctr_x = dx * widths.unsqueeze(2) + ctr_x.unsqueeze(2)
-    pred_ctr_y = dy * heights.unsqueeze(2) + ctr_y.unsqueeze(2)
     pred_w = torch.exp(dw) * widths.unsqueeze(2)
-    pred_h = torch.exp(dh) * heights.unsqueeze(2)
 
     pred_boxes = deltas.clone()
     # x1
-    pred_boxes[:, :, 0::4] = pred_ctr_x - 0.5 * pred_w
-    # y1
-    pred_boxes[:, :, 1::4] = pred_ctr_y - 0.5 * pred_h
+    pred_boxes[:, :, 0::2] = pred_ctr_x - 0.5 * pred_w
     # x2
-    pred_boxes[:, :, 2::4] = pred_ctr_x + 0.5 * pred_w
-    # y2
-    pred_boxes[:, :, 3::4] = pred_ctr_y + 0.5 * pred_h
-
+    pred_boxes[:, :, 1::2] = pred_ctr_x + 0.5 * pred_w
     return pred_boxes
 
 def clip_boxes_batch(boxes, im_shape, batch_size):
