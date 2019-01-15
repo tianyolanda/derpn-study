@@ -18,7 +18,7 @@ from model.utils.config import cfg
 from .generate_anchors import generate_anchors
 from .generate_anchor_strings_DeRPN import generate_anchor_strings
 # from .bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
-from .bbox_transform_DeRPN import bbox_transform_inv_DeRPN, clip_boxes_DeRPN, clip_boxes_batch_DeRPN
+from .bbox_transform_DeRPN import bbox_transform_inv_DeRPN, clip_boxes, clip_boxes_batch
 
 from model.nms.nms_wrapper import nms
 
@@ -43,7 +43,7 @@ class _DeRPN_ProposalLayer(nn.Module):
         self._anchor_strings_h = torch.from_numpy(generate_anchor_strings(w_an = np.array(h_an))).float()
 
         self._num_anchor_strings_w = self._anchor_strings_w.size(0) # 7
-        self._num_anchor_strings_w = self._anchor_strings_h.size(0) # 7
+        self._num_anchor_strings_h = self._anchor_strings_h.size(0) # 7
 
 
         # rois blob: holds R regions of interest, each is a 5-tuple
@@ -155,17 +155,21 @@ class _DeRPN_ProposalLayer(nn.Module):
         # proposals combination 根据anchor string w,h 逐像素生成候选框：
         proposals_w = anchorstring_to_proposal(proposal_strings_w, proposal_strings_h,
                                                scores_w,scores_h,
-                                               combination_topN, combination_topk, batch_size)
-        proposals_h = anchorstring_to_proposal(proposal_strings_w, proposal_strings_h,
-                                               scores_w, scores_h,
-                                               combination_topN, combination_topk, batch_size)
+                                               combination_topN, combination_topk, batch_size,self._num_anchor_strings_w)
+        proposals_h = anchorstring_to_proposal(proposal_strings_h, proposal_strings_w,
+                                               scores_h, scores_w,
+                                               combination_topN, combination_topk, batch_size,self._num_anchor_strings_w)
         # 两者的并集，作为proposals
-        proposals =  torch.cat(proposals_w, proposals_h)
+        proposals = torch.cat(proposals_w, proposals_h)
 
-
+        scores = proposals[:,:,4] # 分数矩阵
+        proposals = proposals[:,:,0:4] # proposal 矩阵
 
         # 2. clip predicted boxes to image
         proposals = clip_boxes(proposals, im_info, batch_size)
+
+
+
         # 将超出输入图像边界的proposals裁剪至图像边界内，并将尺寸过小的proposals滤除掉
         # proposals = clip_boxes_batch(proposals, im_info, batch_size)
 

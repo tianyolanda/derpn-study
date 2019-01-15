@@ -54,13 +54,13 @@ class _RPN(nn.Module):
 
         # DeRPN新增代码分割线---------------------------------------------------------------------------------------------#
         # DeRPN 分别输出w，h的anchor得分：cls层
-        self.DeRPN_cls_score_w = nn.Conv2d(512, self.DeRPN_nc_score_out_w, 1, 1, 0) # [1,14,height,width]
-        self.DeRPN_cls_score_h = nn.Conv2d(512, self.DeRPN_nc_score_out_h, 1, 1, 0) # [1,14,height,width]
+        self.DeRPN_cls_score_w = nn.Conv2d(512, self.DeRPN_nc_score_out_w, 1, 1, 0)  # [1,14,height,width]
+        self.DeRPN_cls_score_h = nn.Conv2d(512, self.DeRPN_nc_score_out_h, 1, 1, 0)  # [1,14,height,width]
         # DeRPN新增代码分割线==================================================#
 
         # define anchor box offset prediction layer
-        self.nc_bbox_out = len(self.anchor_scales) * len(self.anchor_ratios) * 4 # 4(coords) * 9 (anchors)
-        self.RPN_bbox_pred = nn.Conv2d(512, self.nc_bbox_out, 1, 1, 0) # 1*1卷积核，改变维度用
+        self.nc_bbox_out = len(self.anchor_scales) * len(self.anchor_ratios) * 4  # 4(coords) * 9 (anchors)
+        self.RPN_bbox_pred = nn.Conv2d(512, self.nc_bbox_out, 1, 1, 0)  # 1*1卷积核，改变维度用
         # 输入维度512，输出：（k=3*3=9）*4 ----【anchor个数*(4是对每个anchor的regression微调)】
 
         # 讲了老半天，anchors是个啥，啥时候出现，怎么生成？还是不知道。
@@ -108,7 +108,7 @@ class _RPN(nn.Module):
             int(d), # 指定维度
             int(float(input_shape[1] * input_shape[2]) / float(d)),
             # input_shape[1]是anchors数目*d。因此：行变成了原来的anchors倍
-            input_shape[3] # 列不变
+            input_shape[3]  # 列不变
         )
         return x
 
