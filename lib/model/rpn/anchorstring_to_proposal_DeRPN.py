@@ -86,7 +86,7 @@ def anchorstring_to_proposal(anchor_strings_w, anchor_strings_h, scores_w, score
         proposals_ymin = new_anchors_strings_h_single[:, 0]
         proposals_ymax = new_anchors_strings_h_single[:, 1]
 
-        # 整合w,h的分数
+        # 整合w,h的分数：融合后的 box probability
         proposals_scores_w = a5[:, 2]
         proposals_scores_h = new_anchors_strings_h_single[:, 2]
         proposals_scores = 2 / ((1 / proposals_scores_h) + (1 / proposals_scores_w))
