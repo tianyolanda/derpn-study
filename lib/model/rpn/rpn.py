@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from model.utils.config import cfg
 from .proposal_layer import _ProposalLayer
 from .proposal_layer_DeRPN import _DeRPN_ProposalLayer
-from .anchor_target_layer import _AnchorTargetLayer
+from .anchor_target_layer_DeRPN import _AnchorTargetLayer_DeRPN
 from model.utils.net_utils import _smooth_l1_loss
 
 import numpy as np
@@ -164,9 +164,9 @@ class _RPN(nn.Module):
         # 生成(约2w个)->reg微调->滤除尺寸过小的anchor->按照cls分数排序->NMS->挑选出300个anchor->传给roi
         rois = self.RPN_proposal((rpn_cls_prob.data, rpn_bbox_pred.data,
                                  im_info, cfg_key))
-        derpn_rois = self.RPN_proposal((derpn_cls_prob_w.data, derpn_cls_prob_h.data,
-                                        derpn_bbox_pred_w.data,derpn_bbox_pred_h.data,
-                                 im_info, cfg_key))
+        derpn_rois = self._DeRPN_ProposalLayer((derpn_cls_prob_w.data, derpn_cls_prob_h.data,
+                                        derpn_bbox_pred_w.data, derpn_bbox_pred_h.data,
+                                        im_info, cfg_key))
         self.rpn_loss_cls = 0
         self.rpn_loss_box = 0
 
@@ -175,7 +175,7 @@ class _RPN(nn.Module):
         if self.training:
             assert gt_boxes is not None
 
-            rpn_data = self.RPN_anchor_target((rpn_cls_score.data, gt_boxes, im_info, num_boxes))
+            rpn_data = self.RPN_anchor_target((derpn_cls_prob_w.data, derpn_cls_prob_h.data, gt_boxes, im_info, num_boxes))
 
             # compute classification loss 计算前/背景分类loss
             rpn_cls_score = rpn_cls_score_reshape.permute(0, 2, 3, 1).contiguous().view(batch_size, -1, 2)

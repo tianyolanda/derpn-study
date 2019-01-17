@@ -42,8 +42,8 @@ class _DeRPN_ProposalLayer(nn.Module):
         self._anchor_strings_w = torch.from_numpy(generate_anchor_strings(w_an = np.array(w_an))).float()
         self._anchor_strings_h = torch.from_numpy(generate_anchor_strings(w_an = np.array(h_an))).float()
 
-        self._num_anchor_strings_w = self._anchor_strings_w.size(0) # 7
-        self._num_anchor_strings_h = self._anchor_strings_h.size(0) # 7
+        self._num_anchor_strings_w = self._anchor_strings_w.size(0)  # 7
+        self._num_anchor_strings_h = self._anchor_strings_h.size(0)  # 7
 
 
         # rois blob: holds R regions of interest, each is a 5-tuple
