@@ -47,6 +47,7 @@ def bbox_transform_batch(ex_rois, gt_rois):
         gt_ctr_y = gt_rois[:, :, 1] + 0.5 * gt_heights
 
         targets_dx = (gt_ctr_x - ex_ctr_x.view(1,-1).expand_as(gt_ctr_x)) / ex_widths
+        # 将tensor扩展为参数gt_ctr_x的大小。
         targets_dy = (gt_ctr_y - ex_ctr_y.view(1,-1).expand_as(gt_ctr_y)) / ex_heights
         targets_dw = torch.log(gt_widths / ex_widths.view(1,-1).expand_as(gt_widths))
         targets_dh = torch.log(gt_heights / ex_heights.view(1,-1).expand_as(gt_heights))
@@ -70,7 +71,7 @@ def bbox_transform_batch(ex_rois, gt_rois):
         raise ValueError('ex_roi input dimension is not correct.')
 
     targets = torch.stack(
-        (targets_dx, targets_dy, targets_dw, targets_dh),2)
+        (targets_dx, targets_dy, targets_dw, targets_dh),2) # 在第三个维度叠加
 
     return targets
 
