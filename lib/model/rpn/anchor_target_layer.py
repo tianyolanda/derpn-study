@@ -81,11 +81,15 @@ class _AnchorTargetLayer(nn.Module):
         shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
                                   shift_x.ravel(), shift_y.ravel())).transpose())
         shifts = shifts.contiguous().type_as(rpn_cls_score).float() # shape[height*width, 4]
+        # shifts是生成一个矩阵，表示feature map的每个格子的偏移【生成它是为了，让shifts偏移 + 生成的anchors，以制造出每个格子的anchors】
+        # tensor([[0., 0.],
+        #         [16., 0.],
+        #         [32., 0.],
+        #         ...,
+        #         [592., 944.],
+        #         [608., 944.],
+        #         [624., 944.]])
 
-        # add A anchors (1, A, 4) to
-        # cell K shifts (K, 1, 4) to get
-        # shift anchors (K, A, 4)
-        # reshape to (K*A, 4) shifted anchors
         A = self._num_anchors  # A = 9
         K = shifts.size(0) # K=height*width(特征图上的)
 

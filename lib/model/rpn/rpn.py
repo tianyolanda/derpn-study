@@ -164,7 +164,7 @@ class _RPN(nn.Module):
         # 生成(约2w个)->reg微调->滤除尺寸过小的anchor->按照cls分数排序->NMS->挑选出300个anchor->传给roi
         rois = self.RPN_proposal((rpn_cls_prob.data, rpn_bbox_pred.data,
                                  im_info, cfg_key))
-        derpn_rois = self._DeRPN_ProposalLayer((derpn_cls_prob_w.data, derpn_cls_prob_h.data,
+        derpn_rois = self.DeRPN_proposal((derpn_cls_prob_w.data, derpn_cls_prob_h.data,
                                         derpn_bbox_pred_w.data, derpn_bbox_pred_h.data,
                                         im_info, cfg_key))
         self.rpn_loss_cls = 0

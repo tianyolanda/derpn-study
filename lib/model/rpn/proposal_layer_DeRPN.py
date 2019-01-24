@@ -116,12 +116,12 @@ class _DeRPN_ProposalLayer(nn.Module):
         self._anchor_strings_w = self._anchor_strings_w.type_as(scores_w) # 更改type和scores一样
         # anchors = self._anchors.view(1, A, 4) + shifts.view(1, K, 4).permute(1, 0, 2).contiguous()
         anchor_strings_w = self._anchor_strings_w.view(1, A, 2) + shifts_w.view(K, 1, 2)
-        anchor_strings_w = anchor_strings_w.view(1, K * A, 4).expand(batch_size, K * A, 2)
+        anchor_strings_w = anchor_strings_w.view(1, K * A, 2).expand(batch_size, K * A, 2)
         # torch.Size([1, 16800, 2])
         # 对feature map 2400个点，每个点都生成7个anchor strings--(x,w)，共16800个 anchor strings
         # '2' 表示 reg 每个格子的生成值: (xmin,xmax)
 
-        anchor_strings_h = anchor_strings_w # 将w的anchor赋值给h，两者是一样的
+        anchor_strings_h = anchor_strings_w  # 将w的anchor赋值给h，两者是一样的
 
         # Transpose and reshape predicted bbox transformations to get them
         # into the same order as the anchors:

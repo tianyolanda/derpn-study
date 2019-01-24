@@ -35,7 +35,7 @@ class _AnchorTargetLayer_DeRPN(nn.Module):
         labels and bounding-box regression targets.
         给ground truth分配anchor，生成anchor的 分类标签 和 回归box
     """
-    def __init__(self, feat_stride, w_an, h_an):
+    def __init__(self, feat_stride,  w_an, h_an):
         super(_AnchorTargetLayer_DeRPN, self).__init__()
 
         self._feat_stride = feat_stride
@@ -45,11 +45,9 @@ class _AnchorTargetLayer_DeRPN(nn.Module):
         # 生成9个anchor：shape: [9,4]
         # 生成了一张图，存储了9个anchors的对角坐标
         # self._num_anchors = self._anchors.size(0)
-        self.w_an = np.array(w_an)
-        self.h_an = np.array(h_an)
         self._feat_stride = feat_stride
-        self._anchor_strings_w = torch.from_numpy(generate_anchor_strings(self.w_an)).float()
-        self._anchor_strings_h = torch.from_numpy(generate_anchor_strings(self.h_an)).float()
+        self._anchor_strings_w = torch.from_numpy(generate_anchor_strings(w_an = np.array(w_an))).float()
+        self._anchor_strings_h = torch.from_numpy(generate_anchor_strings(w_an = np.array(h_an))).float()
 
         self._num_anchor_strings_w = self._anchor_strings_w.size(0)  # 7
         self._num_anchor_strings_h = self._anchor_strings_h.size(0)  # 7
@@ -70,12 +68,12 @@ class _AnchorTargetLayer_DeRPN(nn.Module):
 
 
         # input是这四个东西的组合！！！：(rpn_cls_score.data, gt_boxes, im_info, num_boxes)，下面将它们逐个拆解
-        scores_w = input[0]  # [1,7,height,width]
-        scores_h = input[1]  # [1,7,height,width]
+        scores_w = input[0][:, self._num_anchors_w:, :, :] # [1,7,height,width]
+        scores_h = input[1][:, self._num_anchors_h:, :, :] # [1,7,height,width]
 
-        gt_boxes = input[2]
-        im_info = input[3]
-        num_boxes = input[4]
+        gt_boxes = input[1]
+        im_info = input[2]
+        num_boxes = input[3]
 
         # map of shape (..., H, W)
         height, width = scores_w.size(2), scores_w.size(3)
@@ -124,11 +122,10 @@ class _AnchorTargetLayer_DeRPN(nn.Module):
         A = self._num_anchor_strings_w # 7
         K = shifts_w.size(0) # 2400
 
-        self._anchor_strings_w = self._anchor_strings_w.type_as(gt_boxes) # 更改type和scores一样
+        self._anchor_strings_w = self._anchor_strings_w.type_as(scores_w) # 更改type和scores一样
         # anchors = self._anchors.view(1, A, 4) + shifts.view(1, K, 4).permute(1, 0, 2).contiguous()
-        anchor_strings_w = self._anchor_strings_w.view(1, A, 2) + shifts_w.view(K, 1, 2)  # shape[K,A,4] 得到所有的anchor
-        anchor_strings_w = anchor_strings_w.view(K * A, 2)  # 生成全部anchor (h*w*9,4)
-
+        anchor_strings_w = self._anchor_strings_w.view(1, A, 2) + shifts_w.view(K, 1, 2)
+        anchor_strings_w = anchor_strings_w.view(1, K * A, 4).expand(batch_size, K * A, 2)
         # torch.Size([1, 16800, 2])
         # 对feature map 2400个点，每个点都生成7个anchor strings--(x,w)，共16800个 anchor strings
         # '2' 表示 reg 每个格子的生成值: (xmin,xmax)
@@ -207,7 +204,6 @@ class _AnchorTargetLayer_DeRPN(nn.Module):
         labels[max_overlaps >= 0.7] = 1  # Threshold used to select if an anchor box is a good foreground box (Default: 0.7)
         # anchor和某个gt的IoU大于0.7：正例
 
-        # 不执行
         if cfg.TRAIN.RPN_CLOBBER_POSITIVES:
             labels[max_overlaps < 0.3] = 0
             # anchor和某个gt的IoU小于0.3：负例
