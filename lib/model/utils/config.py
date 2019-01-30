@@ -316,6 +316,23 @@ __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
+
+
+### from derpn caffe
+
+__C.TEST.DeRPN_top_N = 1500
+
+__C.TEST.DeRPN_final_top_M = 300
+
+__C.DeRPN_anchor_strings = (16, 32, 64, 128, 256, 512, 1024)
+
+
+
+
+
+
+
+
 import pdb
 def get_output_dir(imdb, weights_filename):
   """Return the directory where experimental artifacts are placed.
