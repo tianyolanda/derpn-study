@@ -4,7 +4,11 @@
 import os
 import caffe
 import yaml
-from faster_rcnn.config import cfg
+import torch.nn as nn
+
+# from faster_rcnn.config import cfg
+from model.utils.config import cfg
+
 import numpy as np
 import numpy.random as npr
 from utils.cython_bbox import bbox_overlaps
@@ -76,8 +80,8 @@ class GenerateDeRPNLabelsTargetsLayer(nn.Module):
                       height, width), dtype = np.float32)
         whole_inside_weights = np.zeros((0, 2*(self.num_anchors+self.num_anchors),
                        height, width), dtype = np.float32)
-        reg_num_ofchannel = np.zeros((num_images ,self.num_anchors*4,),np.long)
-        cls_num_ofchannel = np.zeros((num_images ,self.num_anchors*2,),np.long)
+        reg_num_ofchannel = np.zeros((num_images,self.num_anchors*4,),np.long)
+        cls_num_ofchannel = np.zeros((num_images,self.num_anchors*2,),np.long)
 
         for ith_im in range(num_images):
             pred_reg = blob_data[3][ith_im,:,:,:]
@@ -123,6 +127,7 @@ class GenerateDeRPNLabelsTargetsLayer(nn.Module):
         # top[4].reshape(*cls_weights.shape)
         # top[4].data[...] = cls_weights
 
+        # whole_outside_weights 是 reg_weights
         return whole_labels, whole_targets, whole_outside_weights, cls_weights
 
     #

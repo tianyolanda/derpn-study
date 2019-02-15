@@ -33,11 +33,12 @@ from faster_rcnn.nms_wrapper import nms
 class DeRPNProposalsLayer(nn.Module):
 
 	# def setup(self, bottom, top):
-	def __init__(self, feat_stride = 16):
+	def __init__(self, feat_stride):
+		super(DeRPNProposalsLayer, self).__init__()
 
-		cfg_key = str('TRAIN' if self.phase == 0 else 'TEST') # either 'TRAIN' or 'TEST'
-		self.top_N = cfg[cfg_key].DeRPN_top_N
-		self.final_top_M = cfg[cfg_key].DeRPN_final_top_M
+		# cfg_key = str('TRAIN' if self.phase == 0 else 'TEST') # either 'TRAIN' or 'TEST'
+		# self.top_N = cfg[cfg_key].DeRPN_top_N
+		# self.final_top_M = cfg[cfg_key].DeRPN_final_top_M
 
 		# layer_params = yaml.load(self.param_str)
 		# self._feat_stride = layer_params['feat_stride']
@@ -52,14 +53,14 @@ class DeRPNProposalsLayer(nn.Module):
 
 		self.start_point = [(self._feat_stride-1)/2.,(self._feat_stride-1)/2.]
 
-		self.anchor_strings = np.array(cfg.DeRPN_anchor_strings,np.float32)
+		self.DeRPN_anchor_strings = (16, 32, 64, 128, 256, 512, 1024)
+		self.anchor_strings = np.array(self.DeRPN_anchor_strings,np.float32)
 		self.num_anchors = self.anchor_strings.shape[0]
 
 		self.beta = 0.1
 
 		# top[0].reshape(1,5)
 		# top[1].reshape(1,)
-
 
 	def forward(self, bottom):
 		# 每一层用bottom来输入数据，用top来输出数据。
@@ -71,9 +72,13 @@ class DeRPNProposalsLayer(nn.Module):
 		pred_prob_w = pred_prob[:,self.num_anchors:,:,:]
 		pred_reg = bottom[1].data
 		num_images = pred_reg.shape[0]
+		cfg_key = bottom[3].data
+		final_top_M = cfg[cfg_key].DeRPN_final_top_M
+		top_N = cfg[cfg_key].DeRPN_top_N
 
-		yth1, xth1, h_cth1, w_cth1 = self.A_select_B(pred_prob_h, pred_prob_w)
-		yth2, xth2, w_cth2, h_cth2 = self.A_select_B(pred_prob_w, pred_prob_h)
+
+		yth1, xth1, h_cth1, w_cth1 = self.A_select_B(pred_prob_h, pred_prob_w,top_N)
+		yth2, xth2, w_cth2, h_cth2 = self.A_select_B(pred_prob_w, pred_prob_h,top_N)
 		yth = np.hstack((yth1, yth2))
 		xth = np.hstack((xth1, xth2))
 		h_cth = np.hstack((h_cth1, h_cth2))
@@ -95,8 +100,8 @@ class DeRPNProposalsLayer(nn.Module):
 
 			if self.do_NMS:
 				keep = nms(np.hstack((cur_proposals, cur_probs[:,np.newaxis])), np.float(self.nms_thresh) )
-				if self.final_top_M > 0:
-					keep = keep[:self.final_top_M]
+				if final_top_M > 0:
+					keep = keep[:final_top_M]
 				cur_proposals = cur_proposals[keep, :]
 				cur_probs = cur_probs[keep]
 
@@ -155,12 +160,12 @@ class DeRPNProposalsLayer(nn.Module):
 
 		return rois, probs
 
-	def A_select_B(self, prob1,prob2):
+	def A_select_B(self, prob1,prob2,top_N):
 		num, channel, height, width = prob1.shape
 
 		list_prob1 = prob1.reshape(prob1.shape[0],-1)
-		if list_prob1.shape[1]>self.top_N:
-			top_N1 = np.argpartition(-list_prob1, self.top_N, axis=1 )[:, :self.top_N] 
+		if list_prob1.shape[1]>top_N:
+			top_N1 = np.argpartition(-list_prob1, top_N, axis=1 )[:, :top_N]
 		else:
 			top_N1 = np.arange(list_prob1.shape[1],dtype=np.int32)
 			top_N1 = np.repeat(top_N1[np.newaxis,:], list_prob1.shape[0], axis=0)
