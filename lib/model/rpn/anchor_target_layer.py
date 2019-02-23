@@ -80,7 +80,7 @@ class _AnchorTargetLayer(nn.Module):
         shift_x, shift_y = np.meshgrid(shift_x, shift_y)  #生成网格 shift_x shape: [height, width], shift_y shape: [height, width]
         shifts = torch.from_numpy(np.vstack((shift_x.ravel(), shift_y.ravel(),
                                   shift_x.ravel(), shift_y.ravel())).transpose())
-        shifts = shifts.contiguous().type_as(rpn_cls_score).float() # shape[height*width, 4]
+        shifts = shifts.contiguous().type_as(rpn_cls_score).float()  # shape[height*width, 4]
         # shifts是生成一个矩阵，表示feature map的每个格子的偏移【生成它是为了，让shifts偏移 + 生成的anchors，以制造出每个格子的anchors】
         # tensor([[0., 0.],
         #         [16., 0.],
