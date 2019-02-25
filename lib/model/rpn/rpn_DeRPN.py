@@ -19,11 +19,11 @@ import pdb
 import time
 
 
-class _RPN(nn.Module):
+class _deRPN(nn.Module):
     """ region proposal network """
 
     def __init__(self, din):
-        super(_RPN, self).__init__()
+        super(_deRPN, self).__init__()
 
         self.din = din  # get depth of input feature map, e.g., 512
         self.anchor_scales = cfg.ANCHOR_SCALES  # [8,16,32]
@@ -40,7 +40,7 @@ class _RPN(nn.Module):
         # 是前景/背景 分数层
         # 输出维度 计算
         # self.nc_score_out = len(self.anchor_scales) * len(self.anchor_ratios) * 2  # 2(bg/fg) * 9 (anchors)
-        self.nc_score_out = 28
+        self.nc_score_out = 28  # 7*2+7*2
 
         self.RPN_cls_score = nn.Conv2d(512, self.nc_score_out, 1, 1, 0)  # 1*1卷积核，改变维度用
         # 输入维度512，输出：（k=3*3=9）*2  ---- 【anchor个数*前景/背景】
@@ -136,7 +136,7 @@ class _RPN(nn.Module):
             self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)  # Cross entropy error 在这里计算交叉熵loss
             fg_cnt = torch.sum(rpn_label.data.ne(0))
 
-            rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
+            rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights, derpn_class_channel_weights = rpn_data[1:]
 
             # compute bbox regression loss 计算回归微调loss
             rpn_bbox_inside_weights = Variable(rpn_bbox_inside_weights)
